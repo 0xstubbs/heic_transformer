@@ -68,7 +68,7 @@ def remove_duplicate_files(src):
     "--src",
     prompt=Fore.GREEN
     + Style.BRIGHT
-    + "Enter the the source directory for the photos"
+    + "Enter the source directory for the photos"
     + Style.RESET_ALL,
     help="The directory of HEIC files.",
 )
@@ -83,19 +83,6 @@ def remove_duplicate_files(src):
 def convert_heic(src, format):
     while True:
         try:
-            #           src = click.prompt(
-            #               Fore.GREEN
-            #               + Style.BRIGHT
-            #               + "Enter the the source directory for the photos"
-            #               + Style.RESET_ALL
-            #           )
-            #           format = click.prompt(
-            #               Fore.GREEN
-            #               + Style.BRIGHT
-            #               + "Output file format (jpeg, png)"
-            #               + Style.RESET_ALL
-            #           )
-
             # Validate format
             src = os.path.expanduser(src)
             if format not in ["jpeg", "png"]:
