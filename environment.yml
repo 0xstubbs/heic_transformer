@@ -1,0 +1,13 @@
+name: heic_transformer
+channels: 
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pip
+  - click
+  - colorama
+  - tqdm
+  - pip:
+    - Pillow
+    - pillow-heif
