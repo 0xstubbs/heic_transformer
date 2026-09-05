@@ -55,12 +55,7 @@ def get_path_completions(text):
 
 
 def prompt_for_source():
-    prompt = (
-        Fore.GREEN
-        + Style.BRIGHT
-        + "Enter a HEIC file or source directory"
-        + Style.RESET_ALL
-    )
+    prompt = "Enter a HEIC file or source directory"
 
     try:
         import readline
@@ -81,7 +76,7 @@ def prompt_for_source():
             readline.parse_and_bind("bind ^I rl_complete")
         else:
             readline.parse_and_bind("tab: complete")
-        return click.prompt(prompt)
+        return input(f"{prompt}: ")
     finally:
         readline.set_completer(previous_completer)
         readline.set_completer_delims(previous_delimiters)

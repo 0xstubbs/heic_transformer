@@ -53,6 +53,19 @@ class ConvertHeicTests(unittest.TestCase):
             [f"{album_dir}/", str(image_file)],
         )
 
+    def test_source_prompt_is_owned_by_readline_input(self):
+        source = str(self.temp_path / "sloane.HEIC")
+
+        with (
+            patch("builtins.input", return_value=source) as input_mock,
+            patch("convert_heic.click.prompt") as click_prompt,
+        ):
+            result = convert_heic.prompt_for_source()
+
+        self.assertEqual(result, source)
+        input_mock.assert_called_once_with("Enter a HEIC file or source directory: ")
+        click_prompt.assert_not_called()
+
     def test_default_output_directory_uses_source_name(self):
         self.assertEqual(
             convert_heic.build_destination_dir(self.src),
