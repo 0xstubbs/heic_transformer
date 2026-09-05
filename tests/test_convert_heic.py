@@ -53,18 +53,50 @@ class ConvertHeicTests(unittest.TestCase):
             [f"{album_dir}/", str(image_file)],
         )
 
-    def test_source_prompt_is_owned_by_readline_input(self):
+    def test_directory_completion_lists_every_entry(self):
+        directory = self.temp_path / "album"
+        directory.mkdir()
+        entries = [
+            directory / ".hidden.HEIC",
+            directory / "notes.txt",
+            directory / "photo.HEIC",
+        ]
+        for entry in entries:
+            entry.write_bytes(b"sample")
+        nested = directory / "nested"
+        nested.mkdir()
+
+        completions = convert_heic.get_path_completions(f"{directory}/")
+
+        self.assertEqual(
+            completions,
+            [
+                str(entries[0]),
+                f"{nested}/",
+                str(entries[1]),
+                str(entries[2]),
+            ],
+        )
+
+    def test_source_prompt_uses_colored_multicolumn_completion(self):
         source = str(self.temp_path / "sloane.HEIC")
 
-        with (
-            patch("builtins.input", return_value=source) as input_mock,
-            patch("convert_heic.click.prompt") as click_prompt,
-        ):
+        with patch("convert_heic.terminal_prompt", return_value=source) as prompt_mock:
             result = convert_heic.prompt_for_source()
 
         self.assertEqual(result, source)
-        input_mock.assert_called_once_with("Enter a HEIC file or source directory: ")
-        click_prompt.assert_not_called()
+        prompt_text = prompt_mock.call_args.args[0]
+        prompt_options = prompt_mock.call_args.kwargs
+        self.assertIn("Enter a HEIC file or source directory: ", str(prompt_text))
+        self.assertIn(
+            ("source-prompt", "ansigreen bold"),
+            prompt_options["style"].style_rules,
+        )
+        self.assertEqual(
+            prompt_options["complete_style"],
+            convert_heic.CompleteStyle.MULTI_COLUMN,
+        )
+        self.assertFalse(prompt_options["complete_while_typing"])
 
     def test_default_output_directory_uses_source_name(self):
         self.assertEqual(

@@ -1,4 +1,3 @@
-import glob
 import hashlib
 from pathlib import Path
 
@@ -6,6 +5,11 @@ import click
 from colorama import Fore, Style
 from PIL import Image
 import pillow_heif
+from prompt_toolkit import prompt as terminal_prompt
+from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.shortcuts import CompleteStyle
+from prompt_toolkit.styles import Style as PromptStyle
 from tqdm import tqdm
 
 
@@ -38,48 +42,70 @@ def print_intro():
 
 
 def get_path_completions(text):
-    expanded_text = str(Path(text).expanduser()) if text else ""
-    matches = sorted(glob.glob(f"{glob.escape(expanded_text)}*"))
-    home = str(Path.home())
+    if text.endswith("/"):
+        directory = Path(text).expanduser()
+        prefix = ""
+    else:
+        expanded_path = Path(text).expanduser() if text else Path()
+        directory = expanded_path.parent
+        prefix = expanded_path.name
+
+    try:
+        matches = sorted(
+            (entry for entry in directory.iterdir() if entry.name.startswith(prefix)),
+            key=lambda entry: (entry.name.casefold(), entry.name),
+        )
+    except (OSError, ValueError):
+        return []
+
+    home = Path.home()
     completions = []
 
     for match in matches:
-        completion = match
-        if text.startswith("~") and match.startswith(home):
-            completion = f"~{match[len(home) :]}"
-        if Path(match).is_dir():
+        completion = str(match)
+        if text.startswith("~"):
+            try:
+                completion = f"~/{match.relative_to(home)}"
+            except ValueError:
+                pass
+        if match.is_dir():
             completion += "/"
         completions.append(completion)
 
     return completions
 
 
+class SourcePathCompleter(Completer):
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        for completion in get_path_completions(text):
+            is_directory = completion.endswith("/")
+            display = Path(completion.rstrip("/")).name
+            if is_directory:
+                display += "/"
+            yield Completion(
+                completion,
+                start_position=-len(text),
+                display=display,
+                display_meta="directory" if is_directory else "file",
+            )
+
+
 def prompt_for_source():
-    prompt = "Enter a HEIC file or source directory"
-
-    try:
-        import readline
-    except ImportError:
-        return click.prompt(prompt)
-
-    previous_completer = readline.get_completer()
-    previous_delimiters = readline.get_completer_delims()
-
-    def complete(text, state):
-        completions = get_path_completions(text)
-        return completions[state] if state < len(completions) else None
-
-    try:
-        readline.set_completer(complete)
-        readline.set_completer_delims("\t\n")
-        if getattr(readline, "backend", None) == "editline":
-            readline.parse_and_bind("bind ^I rl_complete")
-        else:
-            readline.parse_and_bind("tab: complete")
-        return input(f"{prompt}: ")
-    finally:
-        readline.set_completer(previous_completer)
-        readline.set_completer_delims(previous_delimiters)
+    return terminal_prompt(
+        FormattedText(
+            [
+                (
+                    "class:source-prompt",
+                    "Enter a HEIC file or source directory: ",
+                )
+            ]
+        ),
+        completer=SourcePathCompleter(),
+        complete_style=CompleteStyle.MULTI_COLUMN,
+        complete_while_typing=False,
+        style=PromptStyle.from_dict({"source-prompt": "ansigreen bold"}),
+    )
 
 
 def normalize_source_dir(src):

@@ -47,7 +47,7 @@ To convert HEIC photos in a `Photos` directory, run:
 uv run python main.py
 ```
 
-This starts the CLI tool and prompts for a HEIC file or source directory. Press **Tab** while entering the path to complete matching files and directories:
+This starts the CLI tool and prompts for a HEIC file or source directory. Press **Tab** to open a multi-column menu containing every entry in the current directory, including subdirectories, non-HEIC files, and dotfiles. Select a file or continue into a directory and press **Tab** again:
 
 """
 ----------------------------------------------
