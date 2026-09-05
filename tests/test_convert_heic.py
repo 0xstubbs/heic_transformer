@@ -40,6 +40,19 @@ class ConvertHeicTests(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    def test_path_completions_include_files_and_mark_directories(self):
+        image_file = self.temp_path / "sloane.HEIC"
+        image_file.write_bytes(b"sample")
+        album_dir = self.temp_path / "sloane album"
+        album_dir.mkdir()
+
+        completions = convert_heic.get_path_completions(str(self.temp_path / "slo"))
+
+        self.assertEqual(
+            completions,
+            [f"{album_dir}/", str(image_file)],
+        )
+
     def test_default_output_directory_uses_source_name(self):
         self.assertEqual(
             convert_heic.build_destination_dir(self.src),

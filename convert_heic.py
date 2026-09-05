@@ -1,5 +1,6 @@
-from pathlib import Path
+import glob
 import hashlib
+from pathlib import Path
 
 import click
 from colorama import Fore, Style
@@ -34,6 +35,56 @@ def print_intro():
         + "\n ----------------------------------------------"
         + Style.RESET_ALL
     )
+
+
+def get_path_completions(text):
+    expanded_text = str(Path(text).expanduser()) if text else ""
+    matches = sorted(glob.glob(f"{glob.escape(expanded_text)}*"))
+    home = str(Path.home())
+    completions = []
+
+    for match in matches:
+        completion = match
+        if text.startswith("~") and match.startswith(home):
+            completion = f"~{match[len(home) :]}"
+        if Path(match).is_dir():
+            completion += "/"
+        completions.append(completion)
+
+    return completions
+
+
+def prompt_for_source():
+    prompt = (
+        Fore.GREEN
+        + Style.BRIGHT
+        + "Enter a HEIC file or source directory"
+        + Style.RESET_ALL
+    )
+
+    try:
+        import readline
+    except ImportError:
+        return click.prompt(prompt)
+
+    previous_completer = readline.get_completer()
+    previous_delimiters = readline.get_completer_delims()
+
+    def complete(text, state):
+        completions = get_path_completions(text)
+        return completions[state] if state < len(completions) else None
+
+    try:
+        readline.set_completer(complete)
+        readline.set_completer_delims("\t\n")
+        if getattr(readline, "backend", None) == "editline":
+            readline.parse_and_bind("bind ^I rl_complete")
+        else:
+            readline.parse_and_bind("tab: complete")
+        return click.prompt(prompt)
+    finally:
+        readline.set_completer(previous_completer)
+        readline.set_completer_delims(previous_delimiters)
 
 
 def normalize_source_dir(src):
@@ -136,20 +187,12 @@ def convert_directory(src, output_format, dst=None):
 @click.command()
 @click.option(
     "--src",
-    prompt=Fore.GREEN
-    + Style.BRIGHT
-    + "Enter a HEIC file or source directory"
-    + Style.RESET_ALL,
     help="A HEIC file or directory of HEIC files.",
 )
 @click.option(
     "--format",
     "output_format",
     type=click.Choice(VALID_FORMATS, case_sensitive=False),
-    prompt=Fore.GREEN
-    + Style.BRIGHT
-    + "Output file format (jpeg, png)"
-    + Style.RESET_ALL,
     help="The desired output format.",
 )
 @click.option(
@@ -158,6 +201,16 @@ def convert_directory(src, output_format, dst=None):
 )
 def convert_heic(src, output_format, dst):
     try:
+        if src is None:
+            src = prompt_for_source()
+        if output_format is None:
+            output_format = click.prompt(
+                Fore.GREEN
+                + Style.BRIGHT
+                + "Output file format (jpeg, png)"
+                + Style.RESET_ALL,
+                type=click.Choice(VALID_FORMATS, case_sensitive=False),
+            )
         src_path = normalize_source_dir(src)
         files = get_heic_files(src_path)
         if not files:
