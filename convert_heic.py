@@ -1,14 +1,17 @@
-import os
-from PIL import Image
-import pillow_heif
+from pathlib import Path
+import hashlib
+
 import click
 from colorama import Fore, Style
+from PIL import Image
+import pillow_heif
 from tqdm import tqdm
-import hashlib
 
 
 # Register the HEIF format
 pillow_heif.register_heif_opener()
+
+VALID_FORMATS = ("jpeg", "png")
 
 
 def print_intro():
@@ -33,34 +36,101 @@ def print_intro():
     )
 
 
+def normalize_source_dir(src):
+    src_path = Path(src).expanduser().resolve()
+    if not src_path.is_file() and not src_path.is_dir():
+        raise ValueError("Error: The provided source is not a valid file or directory.")
+    return src_path
+
+
 def get_heic_files(src):
-    try:
-        return [
-            f for f in os.listdir(src) if f.endswith(".HEIC") or f.endswith(".heic")
-        ]
-    except Exception as e:
-        print(Fore.RED + f"Error reading directory: {str(e)}" + Style.RESET_ALL)
-        return []
+    src_path = Path(src)
+    if src_path.is_file():
+        return [src_path] if src_path.suffix.lower() == ".heic" else []
+    return sorted(
+        path
+        for path in src_path.iterdir()
+        if path.is_file() and path.suffix.lower() == ".heic"
+    )
 
 
-def hash_file(file_path):
+def build_destination_dir(src, dst=None):
+    src_path = Path(src).expanduser().resolve()
+    if dst:
+        return Path(dst).expanduser().resolve()
+    if src_path.is_file():
+        return src_path.parent / f"{src_path.stem}_converted"
+    return src_path.parent / f"{src_path.name}_converted"
+
+
+def hash_file(file_path, chunk_size=1024 * 1024):
     hasher = hashlib.md5()
-    with open(file_path, "rb") as f:
-        buf = f.read()
-        hasher.update(buf)
+    with open(file_path, "rb") as file_handle:
+        while chunk := file_handle.read(chunk_size):
+            hasher.update(chunk)
     return hasher.hexdigest()
 
 
 def remove_duplicate_files(src):
-    files = [os.path.join(src, file) for file in os.listdir(src)]
+    files = [path for path in Path(src).iterdir() if path.is_file()]
     seen = {}
-    for file in files:
-        file_hash = hash_file(file)
+    for file_path in files:
+        file_hash = hash_file(file_path)
         if file_hash in seen:
-            os.remove(file)
-            print(f"Removed duplicate file: {file}")
+            file_path.unlink()
+            print(f"Removed duplicate file: {file_path}")
         else:
-            seen[file_hash] = file
+            seen[file_hash] = file_path
+
+
+def convert_image_file(file_path, destination_dir, output_format):
+    output_file_path = Path(destination_dir) / f"{Path(file_path).stem}.{output_format}"
+
+    with Image.open(file_path) as image:
+        save_image = image
+        if output_format == "jpeg" and image.mode != "RGB":
+            save_image = image.convert("RGB")
+        save_image.save(output_file_path, format=output_format.upper())
+
+    return output_file_path
+
+
+def convert_directory(src, output_format, dst=None):
+    normalized_format = output_format.lower()
+    if normalized_format not in VALID_FORMATS:
+        raise ValueError("Invalid format. Please enter jpeg or png.")
+
+    src_path = normalize_source_dir(src)
+    files = get_heic_files(src_path)
+    if not files:
+        raise ValueError("Error: No .heic files found in the directory.")
+
+    destination_dir = build_destination_dir(src_path, dst)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+
+    converted = 0
+    failed = 0
+    errors = []
+
+    with tqdm(total=len(files), bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}") as pbar:
+        for file_path in files:
+            try:
+                convert_image_file(file_path, destination_dir, normalized_format)
+                converted += 1
+            except Exception as exc:
+                failed += 1
+                errors.append((file_path.name, str(exc)))
+            finally:
+                pbar.update(1)
+
+    return {
+        "source": src_path,
+        "destination": destination_dir,
+        "converted": converted,
+        "failed": failed,
+        "errors": errors,
+        "total": len(files),
+    }
 
 
 @click.command()
@@ -68,121 +138,72 @@ def remove_duplicate_files(src):
     "--src",
     prompt=Fore.GREEN
     + Style.BRIGHT
-    + "Enter the source directory for the photos"
+    + "Enter a HEIC file or source directory"
     + Style.RESET_ALL,
-    help="The directory of HEIC files.",
+    help="A HEIC file or directory of HEIC files.",
 )
 @click.option(
     "--format",
+    "output_format",
+    type=click.Choice(VALID_FORMATS, case_sensitive=False),
     prompt=Fore.GREEN
     + Style.BRIGHT
     + "Output file format (jpeg, png)"
     + Style.RESET_ALL,
     help="The desired output format.",
 )
-def convert_heic(src, format):
-    while True:
-        try:
-            # Validate format
-            src = os.path.expanduser(src)
-            if format not in ["jpeg", "png"]:
-                raise ValueError(
-                    Fore.RED
-                    + "Invalid format. Please enter jpeg or png."
-                    + Style.RESET_ALL
-                )
+@click.option(
+    "--dst",
+    help="Optional output directory. Defaults to a sibling '<source>_converted' folder.",
+)
+def convert_heic(src, output_format, dst):
+    try:
+        src_path = normalize_source_dir(src)
+        files = get_heic_files(src_path)
+        if not files:
+            raise ValueError("Error: No .heic files found in the directory.")
 
-            # Check if the provided source is a file or directory
-            if os.path.isfile(src):
-                raise ValueError(
-                    Fore.RED
-                    + "Error: The provided source is a file, not a directory."
-                    + Style.RESET_ALL
-                )
-            elif not os.path.isdir(src):
-                raise ValueError(
-                    Fore.RED
-                    + "Error: The provided source is not a valid directory."
-                    + Style.RESET_ALL
-                )
+        print(
+            Fore.YELLOW
+            + f"There are {len(files)} photos in the directory."
+            + Style.RESET_ALL
+        )
+        print("Here are the first 10 photos:")
+        for filename in files[:10]:
+            print(filename.name)
 
-            # Get the list of .heic files
-            files = get_heic_files(src)
-            if not files:
-                raise ValueError(
-                    Fore.RED
-                    + "Error: No .heic files found in the directory."
-                    + Style.RESET_ALL
-                )
+        if not click.confirm(
+            Fore.GREEN + "Is this the correct directory?" + Style.RESET_ALL
+        ):
+            raise click.Abort()
 
+        destination_dir = build_destination_dir(src_path, dst)
+        print(
+            Fore.YELLOW
+            + f"Converting files from {src_path} to {destination_dir} in {output_format.lower()} format..."
+            + Style.RESET_ALL
+        )
+
+        result = convert_directory(src_path, output_format, dst)
+
+        print(
+            Fore.GREEN
+            + f"Conversion is done. Saved {result['converted']} of {result['total']} files to {result['destination']}."
+            + Style.RESET_ALL
+        )
+
+        if result["failed"]:
             print(
-                Fore.YELLOW
-                + f"There are {len(files)} photos in the directory."
+                Fore.RED
+                + f"{result['failed']} files failed to convert:"
                 + Style.RESET_ALL
             )
-            print("Here are the first 10 photos:")
-            for filename in files[:10]:
-                print(filename)
-
-            if not click.confirm(
-                Fore.GREEN + "Is this the correct directory?" + Style.RESET_ALL
-            ):
-                continue
-            # append "_converted" to the source directory path to form the destination directory path
-            dst = src + "_converted"
-
-            # create the destination directory if it doesn't exist
-            if not os.path.exists(dst):
-                os.makedirs(dst)
-
-            print(
-                Fore.YELLOW
-                + f"Converting files from {src} to {dst} in {format} format..."
-                + Style.RESET_ALL
-            )
-
-            # Create a list of all .heic files
-            files = [
-                f for f in os.listdir(src) if f.endswith(".HEIC") or f.endswith(".heic")
-            ]
-
-            # Create a progress bar
-            with tqdm(
-                total=len(files), bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}"
-            ) as pbar:
-                for filename in files:
-                    # construct the full file path
-                    file_path = os.path.join(src, filename)
-
-                    # read the heic image
-                    heic_image = Image.open(file_path)
-
-                    #                   # convert the heif image to a PIL image
-                    #                   image = Image.frombytes(
-                    #                       heic_image.mode,
-                    #                       heic_image.size,
-                    #                       heic_image.data,
-                    #                       "raw",
-                    #                       heic_image.mode,
-                    #                       heic_image.stride,
-                    #                   )
-
-                    # construct the output filename
-                    output_filename = os.path.splitext(filename)[0] + "." + format
-
-                    # construct the full output file path
-                    output_file_path = os.path.join(dst, output_filename)
-
-                    # save the image in the chosen format
-                    heic_image.save(output_file_path, format=format.upper())
-
-                    # Update the progress bar
-                    pbar.update(1)
-
-            print(Fore.GREEN + "Conversion is done." + Style.RESET_ALL)
-            break
-        except Exception as e:
-            print(Fore.RED + f"An error occurred: {str(e)}" + Style.RESET_ALL)
+            for filename, error_message in result["errors"]:
+                print(Fore.RED + f"- {filename}: {error_message}" + Style.RESET_ALL)
+    except click.Abort:
+        print(Fore.YELLOW + "Conversion cancelled." + Style.RESET_ALL)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 if __name__ == "__main__":

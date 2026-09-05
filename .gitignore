@@ -2,6 +2,8 @@
 
 #Distribution / Packaging
 .Python
+__pycache__/
+*.py[cod]
 build/
 downloads/
 var/

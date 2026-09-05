@@ -14,54 +14,42 @@ HEIC Image Transformer is a Python application that converts HEIC images to JPEG
 Clone the repository to your machine:
 
 ```bash
-git clone https://github.com/0xstubbs/heic-image-transformer.git
+git clone https://github.com/0xstubbs/heic_transformer.git
 ```
 
-### Conda
+## Environment
 
-If you are using conda create a new environments using:
+I recommend using 'uv' for environment management.
 
 ```bash
-conda env create -f environment.yml
+# Install the packages and source the environment
+uv sync
+source .venv/bin/activate
 ```
 
-Or update the environment using:
+## Usage
+
+### Convert a Single HEIC File to PNG
 
 ```bash
-conda env update -f environment.yml
+uv run python main.py --src ~/Pictures/photo.HEIC --format png
 ```
 
-### venv
+A single file is written to a sibling directory named `<file-stem>_converted`.
+For example, `~/Pictures/photo.HEIC` writes `~/Pictures/photo_converted/photo.png`.
+Use `--dst ~/Pictures` to choose a different output directory.
 
-Create and activate a virtual environment (optional but recommended)
+### Convert All HEIC Files in a Directory to JPEG
 
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-Install dependencies
+To convert HEIC photos in a `Photos` directory, run:
 
 ```bash
-pip install -r requirements.txt
-```
-
-## Useage
-
-### Convert All HEIC Files in Directory to JPEG
-
-To convert HEIC photos in a 'Photos' directory do the following;
-
-```bash
-conda env create -f environment.yml
-conda activate heic_transformer
-python convert_heic.py
+uv run python main.py
 ```
 
 This starts the CLI tool and you will be prompted to enter the source directory:
 
 """
-
 ----------------------------------------------
 
 Welcome to the HEIC Image Transformer!
@@ -72,6 +60,11 @@ Enter the source directory for the photos:
 
 """
 
-## Contribution
+By default, converted images are written to a sibling directory named `<source>_converted`.
+For example, `/Users/me/Photos` writes to `/Users/me/Photos_converted`.
 
-See Contributing.md for current list of #TODOs
+You can also run it non-interactively:
+
+```bash
+uv run python main.py --src ~/Photos --format png
+```
