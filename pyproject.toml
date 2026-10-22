@@ -13,3 +13,6 @@ dependencies = [
     "prompt-toolkit>=3.0.53",
     "tqdm>=4.67.3",
 ]
+
+[tool.setuptools]
+py-modules = ["convert_heic", "main"]
