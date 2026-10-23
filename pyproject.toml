@@ -13,3 +13,11 @@ dependencies = [
     "prompt-toolkit>=3.0.53",
     "tqdm>=4.67.3",
 ]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = ["convert_heic", "main"]
+module-root = ""
