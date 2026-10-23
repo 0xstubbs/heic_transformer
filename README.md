@@ -32,7 +32,7 @@ source .venv/bin/activate
 ### Convert a Single HEIC File to PNG
 
 ```bash
-uv run python main.py --src ~/Pictures/photo.HEIC --format png
+uv run python -m main --src ~/Pictures/photo.HEIC --format png
 ```
 
 A single file is written to a sibling directory named `<file-stem>_converted`.
@@ -44,7 +44,7 @@ Use `--dst ~/Pictures` to choose a different output directory.
 To convert HEIC photos in a `Photos` directory, run:
 
 ```bash
-uv run python main.py
+uv run python -m main
 ```
 
 This starts the CLI tool and prompts for a HEIC file or source directory. Press **Tab** to open a multi-column menu containing every entry in the current directory, including subdirectories, non-HEIC files, and dotfiles. Select a file or continue into a directory and press **Tab** again:
@@ -66,5 +66,5 @@ For example, `/Users/me/Photos` writes to `/Users/me/Photos_converted`.
 You can also run it non-interactively:
 
 ```bash
-uv run python main.py --src ~/Photos --format png
+uv run python -m main --src ~/Photos --format png
 ```
